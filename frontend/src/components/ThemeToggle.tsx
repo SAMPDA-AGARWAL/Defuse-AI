@@ -31,13 +31,15 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
   return (
     <button
       onClick={toggleTheme}
-      className={`inline-flex items-center gap-2 rounded-full border border-sr-border bg-sr-header text-sr-text transition-colors hover:border-sr-red hover:text-sr-red ${
-        compact ? 'px-3 py-2 text-sm' : 'px-4 py-2.5 text-sm'
+      className={`inline-flex items-center gap-2 border border-sr-border/10 bg-sr-header text-sr-muted transition-colors hover:text-sr-text ${
+        compact
+          ? 'h-9 w-9 justify-center rounded-xl'
+          : 'rounded-xl px-4 py-2.5 text-sm gap-2'
       }`}
       aria-label="Toggle color theme"
     >
       {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-      {!compact && <span>{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>}
+      {!compact && <span className="text-sm font-medium">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>}
     </button>
   )
 }
