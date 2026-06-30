@@ -4,18 +4,18 @@
 
 /* ─── Design Tokens ─────────────────────────────────────────── */
 :root {
-  --bg:            248 249 250;
+  --bg:            250 250 251;
   --card:          255 255 255;
-  --header:        248 249 250;
-  --border:        15 23 42;
-  --accent:        235 91 42;
-  --accent-warm:   226 138 45;
-  --accent-ok:     22 163 74;
-  --accent-cool:   99 102 241;
+  --header:        236 238 242;
+  --border:        51 65 85;
+  --accent:        225 78 32;
+  --accent-warm:   194 110 13;
+  --accent-ok:     21 128 61;
+  --accent-cool:   79 70 229;
   --text:          15 23 42;
-  --muted:         100 116 139;
-  --shadow-soft:   0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.06);
-  --shadow-card:   0 0 0 1px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.05);
+  --muted:         71 85 105;
+  --shadow-soft:   0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.08);
+  --shadow-card:   0 0 0 1px rgba(15,23,42,0.08), 0 4px 12px rgba(15,23,42,0.06);
   --radius-card:   18px;
   --radius-sm:     12px;
   color-scheme: light;

@@ -12,10 +12,12 @@ import {
 } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import {
+  AlertTriangle,
   Bell,
   Briefcase,
   Calendar,
   CalendarDays,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -49,9 +51,11 @@ import type { SourceConnection, Task, TaskCategory, TaskPriority, TaskSummary, U
 
 type NavFilter =
   | 'all'
+  | 'overdue'
   | 'today'
   | 'week'
   | 'month'
+  | 'later'
   | 'completed'
   | 'calendar'
   | 'study'
@@ -65,9 +69,11 @@ type ResourceKey = 'gmail' | 'calendar' | 'pdf' | 'image'
 
 const NAV_ITEMS: Array<{ key: NavFilter; label: string; icon: typeof Home }> = [
   { key: 'all',       label: 'All Tasks',   icon: LayoutGrid },
+  { key: 'overdue',   label: 'Overdue',     icon: AlertTriangle },
   { key: 'today',     label: 'Due Today',   icon: CheckCircle2 },
   { key: 'week',      label: 'This Week',   icon: CalendarDays },
   { key: 'month',     label: 'This Month',  icon: Calendar },
+  { key: 'later',     label: 'Later',       icon: CalendarClock },
   { key: 'completed', label: 'Completed',   icon: Check },
   { key: 'calendar',  label: 'Calendar',    icon: Calendar },
   { key: 'study',     label: 'Study',       icon: FolderKanban },
@@ -104,7 +110,7 @@ const CATEGORY_ICON_STYLES: Record<TaskCategory, string> = {
   payment:    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   health:     'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
   personal:   'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-  other:      'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+  other:      'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
 }
 
 const TASK_SOURCE_LABELS: Record<string, string> = {
@@ -138,8 +144,21 @@ const SourceIcon = ({ source }: { source: Task['source'] }) => {
 const formatTaskMeta = (task: Task) => {
   if (!task.deadline) return 'No deadline'
   const deadline = new Date(task.deadline)
+  if (deadline < new Date()) return `Overdue • was due ${format(deadline, 'MMM d, h:mm a')}`
   if (isToday(deadline)) return `Due today, ${format(deadline, 'h:mm a')}`
   return `Due ${format(deadline, 'MMM d')}, ${format(deadline, 'h:mm a')}`
+}
+
+// Exclusively buckets a task into exactly one time group so every active
+// task is visible somewhere — overdue/no-deadline tasks never vanish.
+const bucketOf = (task: Task): 'overdue' | 'today' | 'week' | 'month' | 'later' => {
+  if (!task.deadline) return 'later'
+  const deadline = new Date(task.deadline)
+  if (deadline < new Date()) return 'overdue'
+  if (isToday(deadline)) return 'today'
+  if (isThisWeek(deadline, { weekStartsOn: 1 })) return 'week'
+  if (isThisMonth(deadline)) return 'month'
+  return 'later'
 }
 
 const formatResourceSync = (meta?: SourceConnection) => {
@@ -160,9 +179,10 @@ function DashboardTaskRow({
 }) {
   const category    = task.category || 'other'
   const sourceLabel = TASK_SOURCE_LABELS[task.source] || 'Imported'
+  const isOverdue   = !!task.deadline && new Date(task.deadline) < new Date()
 
   return (
-    <div className="task-row group">
+    <div className={`task-row group ${isOverdue ? 'border-l-2 border-rose-500/60 bg-rose-50/40 dark:bg-rose-950/10' : ''}`}>
       {/* Category icon */}
       <div
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${CATEGORY_ICON_STYLES[category]}`}
@@ -178,10 +198,12 @@ function DashboardTaskRow({
             {capitalize(category)}
           </span>
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-sr-muted">
-          <span>{formatTaskMeta(task)}</span>
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+          <span className={isOverdue ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-sr-muted'}>
+            {formatTaskMeta(task)}
+          </span>
           <span className="text-sr-border/40">•</span>
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 text-sr-muted">
             <SourceIcon source={task.source} />
             {sourceLabel}
           </span>
@@ -216,7 +238,8 @@ function SectionCard({
   tasks,
   loading,
   onViewAll,
-  maxRows = 4
+  maxRows = 4,
+  viewAllLabel = 'View all'
 }: {
   title: string
   subtitle: string
@@ -226,6 +249,7 @@ function SectionCard({
   loading: boolean
   onViewAll: () => void
   maxRows?: number
+  viewAllLabel?: string
 }) {
   return (
     <section className="section-card animate-fade-in">
@@ -243,7 +267,7 @@ function SectionCard({
           onClick={onViewAll}
           className="shrink-0 text-xs font-semibold text-sr-purple transition-colors hover:text-sr-red"
         >
-          View all
+          {viewAllLabel}
         </button>
       </div>
 
@@ -279,29 +303,35 @@ function StatCard({
   label,
   value,
   tone,
-  bg
+  bg,
+  onClick
 }: {
   label: string
   value: number
   tone: string
   bg: string
+  onClick?: () => void
 }) {
   return (
-    <div className={`stat-card ${bg}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`stat-card text-left transition-transform hover:-translate-y-0.5 ${bg}`}
+    >
       <p className={`text-2xl font-bold leading-none ${tone}`}>{value}</p>
       <p className="mt-1.5 text-[11px] font-medium text-sr-muted">{label}</p>
-    </div>
+    </button>
   )
 }
 
 // ─── OverviewCard ─────────────────────────────────────────────────────────────
 
-function OverviewCard({ summary }: { summary: TaskSummary }) {
-  const stats = [
-    { label: 'Due Today',    value: summary.dueToday,   tone: 'text-orange-500 dark:text-orange-400',  bg: 'bg-orange-50 dark:bg-orange-900/20' },
-    { label: 'Active Tasks', value: summary.active,     tone: 'text-indigo-500 dark:text-indigo-400',  bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
-    { label: 'Completed',    value: summary.completed,  tone: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-    { label: 'Overdue',      value: summary.overdue,    tone: 'text-rose-500 dark:text-rose-400',      bg: 'bg-rose-50 dark:bg-rose-900/20' }
+function OverviewCard({ summary, onSelect }: { summary: TaskSummary; onSelect: (filter: NavFilter) => void }) {
+  const stats: Array<{ label: string; value: number; tone: string; bg: string; filter: NavFilter }> = [
+    { label: 'Due Today',    value: summary.dueToday,   tone: 'text-orange-500 dark:text-orange-400',  bg: 'bg-orange-50 dark:bg-orange-900/20',  filter: 'today' },
+    { label: 'Active Tasks', value: summary.active,     tone: 'text-indigo-500 dark:text-indigo-400',  bg: 'bg-indigo-50 dark:bg-indigo-900/20',  filter: 'all' },
+    { label: 'Completed',    value: summary.completed,  tone: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', filter: 'completed' },
+    { label: 'Overdue',      value: summary.overdue,    tone: 'text-rose-500 dark:text-rose-400',      bg: 'bg-rose-50 dark:bg-rose-900/20',      filter: 'overdue' }
   ]
 
   return (
@@ -309,7 +339,7 @@ function OverviewCard({ summary }: { summary: TaskSummary }) {
       <h3 className="text-sm font-semibold text-sr-text">Overview</h3>
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         {stats.map((item) => (
-          <StatCard key={item.label} {...item} />
+          <StatCard key={item.label} {...item} onClick={() => onSelect(item.filter)} />
         ))}
       </div>
     </section>
@@ -541,16 +571,17 @@ export default function DashboardPage() {
   }, [activeTasks, searchQuery])
 
   const filterTasksByNav = (task: Task) => {
-    const deadline = task.deadline ? new Date(task.deadline) : null
     switch (activeFilter) {
-      case 'today':     return deadline ? isToday(deadline) : false
-      case 'week':      return deadline ? isThisWeek(deadline, { weekStartsOn: 1 }) : false
-      case 'month':     return deadline ? isThisMonth(deadline) : false
       case 'calendar':  return task.source === 'calendar'
       case 'study':     return ['study', 'exam', 'assignment'].includes(task.category)
       case 'work':      return ['work', 'meeting'].includes(task.category)
       case 'payment':   return task.category === 'payment'
       case 'personal':  return ['personal', 'health'].includes(task.category)
+      case 'overdue':   return bucketOf(task) === 'overdue'
+      case 'today':     return bucketOf(task) === 'today'
+      case 'week':      return bucketOf(task) === 'week'
+      case 'month':     return bucketOf(task) === 'month'
+      case 'later':     return bucketOf(task) === 'later'
       default:          return true
     }
   }
@@ -567,26 +598,13 @@ export default function DashboardPage() {
     return base.filter((task) => task.title.toLowerCase().includes(query))
   }, [completedTasks, activeFilter, searchQuery])
 
-  const dueTodayTasks = useMemo(
-    () => visibleActiveTasks.filter((t) => t.deadline && isToday(new Date(t.deadline))),
-    [visibleActiveTasks]
-  )
-  const thisWeekTasks = useMemo(
-    () => visibleActiveTasks.filter((t) => {
-      if (!t.deadline) return false
-      const d = new Date(t.deadline)
-      return !isToday(d) && isThisWeek(d, { weekStartsOn: 1 })
-    }),
-    [visibleActiveTasks]
-  )
-  const thisMonthTasks = useMemo(
-    () => visibleActiveTasks.filter((t) => {
-      if (!t.deadline) return false
-      const d = new Date(t.deadline)
-      return !isThisWeek(d, { weekStartsOn: 1 }) && isThisMonth(d)
-    }),
-    [visibleActiveTasks]
-  )
+  // When viewing "All Tasks" or a single category, break the pool into the
+  // 5 exclusive time buckets so nothing — overdue, far-future, or no-deadline — is ever dropped.
+  const overdueTasks = useMemo(() => visibleActiveTasks.filter((t) => bucketOf(t) === 'overdue'), [visibleActiveTasks])
+  const dueTodayTasks = useMemo(() => visibleActiveTasks.filter((t) => bucketOf(t) === 'today'), [visibleActiveTasks])
+  const thisWeekTasks = useMemo(() => visibleActiveTasks.filter((t) => bucketOf(t) === 'week'), [visibleActiveTasks])
+  const thisMonthTasks = useMemo(() => visibleActiveTasks.filter((t) => bucketOf(t) === 'month'), [visibleActiveTasks])
+  const laterTasks = useMemo(() => visibleActiveTasks.filter((t) => bucketOf(t) === 'later'), [visibleActiveTasks])
 
   const importedTasks = useMemo(
     () => tasks.filter((t) => t.source !== 'manual' || t.sourceMetadata?.importType === 'syllabus_pdf'),
@@ -611,7 +629,16 @@ export default function DashboardPage() {
   const firstName = user?.name?.split(' ')[0] || 'there'
 
   // ── Sections config ───────────────────────────────────────────────────────
-  const sections = [
+  // Shown as separate cards on "All Tasks". Every active task lands in
+  // exactly one of these five — none can silently disappear.
+  const allTasksSections = [
+    {
+      key:       'overdue' as NavFilter,
+      title:     'Overdue',
+      subtitle:  'Past deadline — handle these first',
+      tasks:     overdueTasks,
+      badgeTone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+    },
     {
       key:       'today'  as NavFilter,
       title:     'Due Today',
@@ -632,8 +659,30 @@ export default function DashboardPage() {
       subtitle:  'Upcoming tasks this month',
       tasks:     thisMonthTasks,
       badgeTone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
+    },
+    {
+      key:       'later'  as NavFilter,
+      title:     'Later',
+      subtitle:  'Beyond this month or no deadline set',
+      tasks:     laterTasks,
+      badgeTone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
     }
   ]
+
+  // Shown when a single sidebar filter (a bucket or a category) is active —
+  // one complete, untruncated list instead of re-slicing the 5 buckets above.
+  const SINGLE_FILTER_META: Partial<Record<NavFilter, { title: string; subtitle: string; badgeTone: string }>> = {
+    overdue:  { title: 'Overdue',     subtitle: 'Past deadline — handle these first',        badgeTone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
+    today:    { title: 'Due Today',   subtitle: 'Tasks that need your attention today',      badgeTone: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    week:     { title: 'This Week',   subtitle: 'Tasks due in the next 7 days',              badgeTone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    month:    { title: 'This Month',  subtitle: 'Upcoming tasks this month',                 badgeTone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+    later:    { title: 'Later',       subtitle: 'Beyond this month or no deadline set',       badgeTone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+    calendar: { title: 'Calendar',    subtitle: 'Tasks imported from your calendar',          badgeTone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    study:    { title: 'Study',       subtitle: 'Study, exams, and assignments',              badgeTone: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+    work:     { title: 'Work',        subtitle: 'Work tasks and meetings',                    badgeTone: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    payment:  { title: 'Payments',    subtitle: 'Bills and payments due',                     badgeTone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+    personal: { title: 'Personal',    subtitle: 'Personal and health tasks',                  badgeTone: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' }
+  }
 
   // ── Resources config ──────────────────────────────────────────────────────
   const resourceCards = [
@@ -644,7 +693,7 @@ export default function DashboardPage() {
       statusLabel: user?.sources?.gmail?.status === 'connected' ? 'Synced' : 'Connect',
       statusTone:  user?.sources?.gmail?.status === 'connected'
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
       subtitle:    formatResourceSync(user?.sources?.gmail),
       actionLabel: 'Refresh',
       onAction:    () => setShowGmailModal(true),
@@ -657,7 +706,7 @@ export default function DashboardPage() {
       statusLabel: user?.sources?.calendar?.status === 'connected' ? 'Synced' : 'Connect',
       statusTone:  user?.sources?.calendar?.status === 'connected'
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
       subtitle:    formatResourceSync(user?.sources?.calendar),
       actionLabel: syncingCal ? 'Refreshing' : 'Refresh',
       onAction:    () => void handleCalendarRefresh(),
@@ -670,7 +719,7 @@ export default function DashboardPage() {
       statusLabel: user?.sources?.pdf?.status === 'connected' ? 'Ready' : 'Upload',
       statusTone:  user?.sources?.pdf?.status === 'connected'
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
       subtitle:    user?.sources?.pdf?.fileName || formatResourceSync(user?.sources?.pdf),
       actionLabel: 'Upload',
       onAction:    () => setShowPdfModal(true),
@@ -683,7 +732,7 @@ export default function DashboardPage() {
       statusLabel: user?.sources?.image?.status === 'connected' ? 'Ready' : 'Upload',
       statusTone:  user?.sources?.image?.status === 'connected'
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
       subtitle:    user?.sources?.image?.fileName || formatResourceSync(user?.sources?.image),
       actionLabel: 'Upload',
       onAction:    () => imageInputRef.current?.click(),
@@ -706,58 +755,59 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="shrink-0 px-3 pb-2 space-y-0.5">
-        {/* Home */}
-        <button
-          type="button"
-          onClick={() => { router.push('/'); setSidebarOpen(false) }}
-          className="nav-item w-full"
-        >
-          <Home className="h-4 w-4 shrink-0" />
-          <span>Home</span>
-        </button>
+      {/* Scrollable middle: nav + AI insights. Logo stays pinned above,
+          profile stays pinned below, regardless of how many nav items there are. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Nav */}
+        <nav className="px-3 pb-2 space-y-0.5">
+          {/* Home */}
+          <button
+            type="button"
+            onClick={() => { router.push('/'); setSidebarOpen(false) }}
+            className="nav-item w-full"
+          >
+            <Home className="h-4 w-4 shrink-0" />
+            <span>Home</span>
+          </button>
 
-        {/* Divider */}
-        <div className="mx-1 my-2 h-px bg-sr-border/8" />
+          {/* Divider */}
+          <div className="mx-1 my-2 h-px bg-sr-border/8" />
 
-        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-          const isActive = activeFilter === key
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => { setActiveFilter(key); setSidebarOpen(false) }}
-              className={`nav-item w-full ${isActive ? 'nav-item-active' : ''}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{label}</span>
-            </button>
-          )
-        })}
-      </nav>
+          {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+            const isActive = activeFilter === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { setActiveFilter(key); setSidebarOpen(false) }}
+                className={`nav-item w-full ${isActive ? 'nav-item-active' : ''}`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{label}</span>
+              </button>
+            )
+          })}
+        </nav>
 
-      {/* Spacer */}
-      <div className="flex-1 overflow-y-auto" />
-
-      {/* AI Insights mini-card */}
-      <div className="shrink-0 mx-3 mb-3 rounded-2xl border border-orange-200/60 bg-gradient-to-b from-orange-50 to-amber-50 p-4 dark:border-orange-900/30 dark:from-orange-900/20 dark:to-amber-900/20">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-600 dark:text-orange-400">AI Insights</p>
+        {/* AI Insights mini-card */}
+        <div className="mx-3 mt-2 mb-3 rounded-2xl border border-orange-200/60 bg-gradient-to-b from-orange-50 to-amber-50 p-4 dark:border-orange-900/30 dark:from-orange-900/20 dark:to-amber-900/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-600 dark:text-orange-400">AI Insights</p>
+          </div>
+          <p className="text-xs leading-5 text-sr-muted">
+            You have <span className="font-semibold text-sr-text">{summary.dueToday}</span> tasks due today and{' '}
+            <span className="font-semibold text-sr-text">{importedDueThisWeek}</span> due this week. Focus on finishing high priority items first.
+          </p>
+          <button
+            type="button"
+            onClick={handleRefreshSummary}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white/80 px-3 py-2 text-xs font-semibold text-sr-text transition-colors hover:bg-white dark:border-orange-900/40 dark:bg-sr-card/60 dark:hover:bg-sr-card"
+          >
+            <RefreshCw className="h-3 w-3 text-orange-500" />
+            Refresh Insights
+          </button>
         </div>
-        <p className="text-xs leading-5 text-sr-muted">
-          You have <span className="font-semibold text-sr-text">{summary.dueToday}</span> tasks due today and{' '}
-          <span className="font-semibold text-sr-text">{importedDueThisWeek}</span> due this week. Focus on finishing high priority items first.
-        </p>
-        <button
-          type="button"
-          onClick={handleRefreshSummary}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white/80 px-3 py-2 text-xs font-semibold text-sr-text transition-colors hover:bg-white dark:border-orange-900/40 dark:bg-sr-card/60 dark:hover:bg-sr-card"
-        >
-          <RefreshCw className="h-3 w-3 text-orange-500" />
-          Refresh Insights
-        </button>
       </div>
 
       {/* User profile */}
@@ -815,7 +865,7 @@ export default function DashboardPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-sr-bg">
+    <div className="flex h-screen overflow-hidden bg-sr-bg">
       {/* ── Modals & overlays ── */}
       {showGmailModal && (
         <GmailSyncModal
@@ -914,8 +964,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Left Sidebar (fixed) ── */}
-      <aside className="hidden w-[240px] shrink-0 xl:flex xl:flex-col border-r border-sr-border/08 bg-sr-card xl:sticky xl:top-0 xl:h-screen">
+      {/* ── Left Sidebar (own scroll region) ── */}
+      <aside className="hidden h-full w-[240px] shrink-0 overflow-y-auto xl:flex xl:flex-col border-r border-sr-border/08 bg-sr-card">
         <SidebarContent />
       </aside>
 
@@ -927,7 +977,7 @@ export default function DashboardPage() {
         >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="absolute left-0 top-0 h-full w-[260px] bg-sr-card shadow-[4px_0_24px_rgba(0,0,0,0.15)] animate-slide-in"
+            className="absolute left-0 top-0 h-full w-[260px] overflow-y-auto bg-sr-card shadow-[4px_0_24px_rgba(0,0,0,0.15)] animate-slide-in"
             onClick={(e) => e.stopPropagation()}
           >
             <SidebarContent mobile />
@@ -935,8 +985,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Main scrollable area ── */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* ── Main column ── */}
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <header className="shrink-0 border-b border-sr-border/08 bg-sr-card px-5 py-3.5">
           <div className="flex items-center justify-between gap-4">
@@ -997,10 +1047,10 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Scrollable content */}
-        <div className="flex flex-1">
+        {/* Scrollable content — main task list and right panel each scroll independently */}
+        <div className="flex flex-1 overflow-hidden">
           {/* Center column */}
-          <main className="flex-1 px-5 py-5">
+          <main className="flex-1 overflow-y-auto px-5 py-5">
             {/* Mobile search */}
             <label className="mb-4 flex items-center gap-2 rounded-xl border border-sr-border/10 bg-sr-card px-3 py-2.5 text-sm text-sr-muted md:hidden">
               <Search className="h-4 w-4 shrink-0" />
@@ -1118,8 +1168,8 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </section>
-              ) : (
-                sections.map((section) => (
+              ) : activeFilter === 'all' ? (
+                allTasksSections.map((section) => (
                   <SectionCard
                     key={section.key}
                     title={section.title}
@@ -1129,17 +1179,29 @@ export default function DashboardPage() {
                     tasks={section.tasks}
                     loading={loading}
                     onViewAll={() => setActiveFilter(section.key)}
-                    maxRows={activeFilter === 'all' ? 4 : 8}
+                    maxRows={4}
                   />
                 ))
+              ) : (
+                <SectionCard
+                  title={SINGLE_FILTER_META[activeFilter]?.title || 'Tasks'}
+                  subtitle={SINGLE_FILTER_META[activeFilter]?.subtitle || ''}
+                  count={visibleActiveTasks.length}
+                  badgeTone={SINGLE_FILTER_META[activeFilter]?.badgeTone || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}
+                  tasks={visibleActiveTasks}
+                  loading={loading}
+                  onViewAll={() => setActiveFilter('all')}
+                  viewAllLabel="Back to All Tasks"
+                  maxRows={200}
+                />
               )}
             </div>
           </main>
 
           {/* Right panel */}
-          <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-sr-border/08 bg-sr-bg p-4 lg:block xl:sticky xl:top-0 xl:h-screen">
+          <aside className="hidden h-full w-[300px] shrink-0 overflow-y-auto border-l border-sr-border/08 bg-sr-bg p-4 lg:block">
             <div className="space-y-4">
-              <OverviewCard summary={summary} />
+              <OverviewCard summary={summary} onSelect={setActiveFilter} />
 
               <AISummaryCard
                 text={aiSummaryText}

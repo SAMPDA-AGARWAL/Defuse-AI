@@ -65,7 +65,7 @@ export const useTasks = (userId?: string) => {
     return (new Date(t.deadline).getTime() - Date.now()) < 6 * 3600000
   })
 
-  const activeTasks = tasks.filter(t => ['pending', 'in_progress', 'defusing'].includes(t.status))
+  const activeTasks = tasks.filter(t => t.status !== 'completed')
   const completedTasks = tasks
     .filter(t => t.status === 'completed')
     .sort((a, b) => {
