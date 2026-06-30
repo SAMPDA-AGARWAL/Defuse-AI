@@ -26,7 +26,8 @@ const userSchema = new mongoose.Schema({
     tasksCompleted: { type: Number, default: 0 },
     deadlinesMissed: { type: Number, default: 0 },
     currentStreak: { type: Number, default: 0 },
-    longestStreak: { type: Number, default: 0 }
+    longestStreak: { type: Number, default: 0 },
+    lastCompletedDay: Date
   },
   pushSubscription: mongoose.Schema.Types.Mixed
 }, { timestamps: true })

@@ -54,6 +54,13 @@ export const useTasks = (userId?: string) => {
   })
 
   const activeTasks = tasks.filter(t => ['pending', 'in_progress', 'defusing'].includes(t.status))
+  const completedTasks = tasks
+    .filter(t => t.status === 'completed')
+    .sort((a, b) => {
+      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.updatedAt).getTime()
+      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.updatedAt).getTime()
+      return bTime - aTime
+    })
 
-  return { tasks, activeTasks, criticalTasks, summary, loading, error, refetch: fetchTasks }
+  return { tasks, activeTasks, completedTasks, criticalTasks, summary, loading, error, refetch: fetchTasks }
 }

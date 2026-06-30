@@ -17,6 +17,7 @@ const taskSchema = new mongoose.Schema({
   description: String,
   deadline: { type: Date, index: true },
   estimatedMinutes: { type: Number, default: 60 },
+  progressPercent: { type: Number, default: 0, min: 0, max: 100 },
   aiEstimatedMinutes: Number,
   aiEstimateReasoning: String,
   priority: { type: String, enum: ['critical', 'high', 'medium', 'low'], default: 'medium' },

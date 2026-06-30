@@ -21,6 +21,7 @@ export interface Task {
   description?: string
   deadline?: string
   estimatedMinutes: number
+  progressPercent?: number
   aiEstimatedMinutes?: number
   priority: TaskPriority
   category: TaskCategory
@@ -54,6 +55,8 @@ export interface User {
     tasksCompleted: number
     deadlinesMissed: number
     currentStreak: number
+    longestStreak: number
+    lastCompletedDay?: string
   }
 }
 

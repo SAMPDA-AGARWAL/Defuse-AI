@@ -122,6 +122,35 @@ const extractTasksFromImage = async (base64Image, mimeType = 'image/jpeg') => {
   )
 }
 
+const extractTasksFromSyllabus = async (text) => {
+  const normalized = text.replace(/\u0000/g, ' ').replace(/\s+/g, ' ').trim()
+  const key = cacheKey('syllabus', normalized.slice(0, 12000))
+  const cached = await fromCache(key)
+  if (cached) return cached
+
+  const result = await callAI(
+    `You are extracting academic deadlines from a course syllabus.
+Today: ${new Date().toISOString().slice(0, 10)}.
+Read the FULL syllabus text and extract ALL exams, quizzes, assignments, projects, labs, presentations, submissions, registration dates, and any dated academic deadlines for the entire semester.
+
+Rules:
+- Do not skip far-future items.
+- If a date is partial but still meaningful, infer the correct year from the syllabus context.
+- Prefer concrete deadlines over general weekly class meetings.
+- Create one task per deadline.
+- Use category "exam" for exams/quizzes/tests, "assignment" for assignments/projects/labs, otherwise "study".
+- Keep titles short and student-friendly.
+- Return ONLY JSON in this exact format: ${TASK_JSON_FORMAT}
+
+Syllabus text:
+"""${normalized.slice(0, 50000)}"""`,
+    { responseFormat: 'json', maxTokens: 4096 }
+  )
+
+  await toCache(key, result)
+  return result
+}
+
 const generateBattlePlan = async (tasks, availableHours = 8) => {
   const taskList = tasks.slice(0, 15).map(t =>
     `- ${t.title} (dl: ${t.deadline ? new Date(t.deadline).toISOString() : 'flex'}, est: ${t.estimatedMinutes}m, pri: ${t.priority})`
@@ -193,6 +222,7 @@ module.exports = {
   extractTasksFromText,
   extractTasksFromBatch,
   extractTasksFromImage,
+  extractTasksFromSyllabus,
   generateBattlePlan,
   generateDefusePlan,
   generateStarterContent,
