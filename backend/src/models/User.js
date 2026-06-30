@@ -3,8 +3,13 @@ const mongoose = require('mongoose')
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   name: { type: String, required: true },
+  passwordHash: String,
   avatar: String,
   googleId: String,
+  authProviders: {
+    google: { type: Boolean, default: false },
+    email: { type: Boolean, default: false }
+  },
   googleTokens: {
     access_token: String,
     refresh_token: String,
@@ -29,12 +34,43 @@ const userSchema = new mongoose.Schema({
     longestStreak: { type: Number, default: 0 },
     lastCompletedDay: Date
   },
+  onboardingCompleted: { type: Boolean, default: false },
+  sources: {
+    gmail: {
+      status: { type: String, enum: ['connected', 'not_connected', 'disconnected', 'error'], default: 'not_connected' },
+      lastSyncedAt: Date,
+      lastError: String
+    },
+    calendar: {
+      status: { type: String, enum: ['connected', 'not_connected', 'disconnected', 'error'], default: 'not_connected' },
+      lastSyncedAt: Date,
+      lastError: String
+    },
+    pdf: {
+      status: { type: String, enum: ['connected', 'not_connected', 'disconnected', 'error'], default: 'not_connected' },
+      lastSyncedAt: Date,
+      lastError: String,
+      fileName: String
+    },
+    image: {
+      status: { type: String, enum: ['connected', 'not_connected', 'disconnected', 'error'], default: 'not_connected' },
+      lastSyncedAt: Date,
+      lastError: String,
+      fileName: String
+    },
+    whatsapp: {
+      status: { type: String, enum: ['connected', 'not_connected', 'disconnected', 'error'], default: 'not_connected' },
+      lastSyncedAt: Date,
+      lastError: String
+    }
+  },
   pushSubscription: mongoose.Schema.Types.Mixed
 }, { timestamps: true })
 
 userSchema.methods.toJSON = function () {
   const obj = this.toObject()
   delete obj.googleTokens
+  delete obj.passwordHash
   return obj
 }
 

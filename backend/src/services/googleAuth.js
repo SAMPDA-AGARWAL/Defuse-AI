@@ -18,9 +18,14 @@ const createOAuthClient = (tokens = null) => {
   return client
 }
 
-const getAuthUrl = () => {
+const getAuthUrl = (state) => {
   const client = createOAuthClient()
-  return client.generateAuthUrl({ access_type: 'offline', scope: SCOPES, prompt: 'consent' })
+  return client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent',
+    ...(state ? { state } : {})
+  })
 }
 
 const getTokensFromCode = async (code) => {

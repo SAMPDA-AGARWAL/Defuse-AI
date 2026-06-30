@@ -1,7 +1,8 @@
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 export type TaskStatus = 'pending' | 'in_progress' | 'defusing' | 'completed' | 'missed'
-export type TaskSource = 'gmail' | 'calendar' | 'screenshot' | 'whatsapp' | 'voice' | 'manual'
+export type TaskSource = 'gmail' | 'calendar' | 'pdf' | 'image' | 'screenshot' | 'whatsapp' | 'voice' | 'manual'
 export type TaskCategory = 'study' | 'exam' | 'assignment' | 'work' | 'meeting' | 'payment' | 'health' | 'personal' | 'other'
+export type SourceStatus = 'connected' | 'not_connected' | 'disconnected' | 'error'
 
 export interface SprintBlock {
   order: number
@@ -44,6 +45,11 @@ export interface User {
   email: string
   name: string
   avatar?: string
+  onboardingCompleted?: boolean
+  authProviders?: {
+    google: boolean
+    email: boolean
+  }
   preferences: {
     morningBriefingTime: string
     whatsappNumber?: string
@@ -58,6 +64,20 @@ export interface User {
     longestStreak: number
     lastCompletedDay?: string
   }
+  sources: {
+    gmail: SourceConnection
+    calendar: SourceConnection
+    pdf: SourceConnection
+    image: SourceConnection
+    whatsapp: SourceConnection
+  }
+}
+
+export interface SourceConnection {
+  status: SourceStatus
+  lastSyncedAt?: string
+  lastError?: string
+  fileName?: string
 }
 
 export interface BattlePlanBlock {
@@ -74,6 +94,21 @@ export interface TaskSummary {
   high: number
   upcoming: number
   total: number
+  dueToday: number
+  active: number
+  completed: number
+  highPriority: number
+  overdue: number
+  sourceCounts: {
+    gmail: number
+    calendar: number
+    pdf: number
+    image: number
+    voice: number
+    whatsapp: number
+    manual: number
+  }
+  aiSummary?: string
 }
 
 export interface ChatMessage {

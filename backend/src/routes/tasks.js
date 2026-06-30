@@ -6,11 +6,21 @@ const auth = require('../middleware/auth')
 const upload = require('../middleware/upload')
 const asyncHandler = require('../utils/asyncHandler')
 const { PDFParse } = require('pdf-parse')
-const { extractTasksFromText, extractTasksFromImage, extractTasksFromSyllabus } = require('../services/ai')
+const { extractTasksFromText, extractTasksFromImage, extractTasksFromSyllabus, generateDashboardSummary } = require('../services/ai')
 const { uploadScreenshot } = require('../services/bunny')
 
 const VALID_PRIORITIES = ['critical', 'high', 'medium', 'low']
 const VALID_CATEGORIES = ['study', 'exam', 'assignment', 'work', 'meeting', 'payment', 'health', 'personal', 'other']
+
+const normalizeSourceCounts = (tasks) => ({
+  gmail: tasks.filter((task) => task.source === 'gmail').length,
+  calendar: tasks.filter((task) => task.source === 'calendar').length,
+  pdf: tasks.filter((task) => task.source === 'pdf' || task.sourceMetadata?.importType === 'syllabus_pdf').length,
+  image: tasks.filter((task) => ['image', 'screenshot'].includes(task.source)).length,
+  voice: tasks.filter((task) => task.source === 'voice').length,
+  whatsapp: tasks.filter((task) => task.source === 'whatsapp').length,
+  manual: tasks.filter((task) => task.source === 'manual' && task.sourceMetadata?.importType !== 'syllabus_pdf').length
+})
 
 const createReviewedSyllabusTasks = async ({ userId, reviewedTasks, originalFileName }) => {
   const cleanedTasks = reviewedTasks
@@ -25,7 +35,7 @@ const createReviewedSyllabusTasks = async ({ userId, reviewedTasks, originalFile
       category: VALID_CATEGORIES.includes(task.category || task.taskType)
         ? (task.category || task.taskType)
         : 'study',
-      source: 'manual',
+      source: 'pdf',
       sourceMetadata: {
         importType: 'syllabus_pdf',
         originalFileName
@@ -52,11 +62,20 @@ router.get('/', auth, asyncHandler(async (req, res) => {
 
   const tasks = await Task.find(filter).sort({ deadline: 1, createdAt: -1 })
   const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const tomorrowStart = new Date(todayStart.getTime() + 86400000)
   const summary = {
     critical: tasks.filter(t => t.deadline && (t.deadline - now) < 6 * 3600000 && t.status !== 'completed').length,
-    high: tasks.filter(t => t.priority === 'high' && t.status !== 'completed').length,
-    upcoming: tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length,
-    total: tasks.length
+    high: tasks.filter(t => ['critical', 'high'].includes(t.priority) && t.status !== 'completed').length,
+    upcoming: tasks.filter(t => ['pending', 'in_progress', 'defusing'].includes(t.status)).length,
+    total: tasks.length,
+    dueToday: tasks.filter(t => t.deadline && t.deadline >= todayStart && t.deadline < tomorrowStart && t.status !== 'completed').length,
+    active: tasks.filter(t => ['pending', 'in_progress', 'defusing'].includes(t.status)).length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+    highPriority: tasks.filter(t => ['critical', 'high'].includes(t.priority) && t.status !== 'completed').length,
+    overdue: tasks.filter(t => t.deadline && t.deadline < now && t.status !== 'completed').length,
+    sourceCounts: normalizeSourceCounts(tasks),
+    aiSummary: await generateDashboardSummary(tasks)
   }
   res.json({ success: true, tasks, summary })
 }))
@@ -107,11 +126,22 @@ router.post('/extract', auth, upload.single('file'), asyncHandler(async (req, re
       estimatedMinutes: taskData.estimatedMinutes || 60,
       priority: taskData.priority || 'medium',
       category: taskData.taskType || 'other',
-      source: req.file ? 'screenshot' : 'manual',
+      source: req.file ? 'image' : 'manual',
       sourceMetadata: result._screenshotUrl ? { screenshotUrl: result._screenshotUrl } : {},
       tags: [taskData.taskType].filter(Boolean)
     })
     created.push(task)
+  }
+
+  if (req.file) {
+    req.user.sources.image = {
+      ...(req.user.sources?.image?.toObject ? req.user.sources.image.toObject() : req.user.sources?.image || {}),
+      status: 'connected',
+      fileName: req.file.originalname,
+      lastSyncedAt: new Date(),
+      lastError: ''
+    }
+    await req.user.save()
   }
 
   const io = req.app.get('io')
@@ -161,6 +191,15 @@ router.post('/scan-syllabus', auth, upload.single('file'), asyncHandler(async (r
   const io = req.app.get('io')
   created.forEach((task) => io.to(`user:${req.userId}`).emit('task:created', task))
 
+  req.user.sources.pdf = {
+    ...(req.user.sources?.pdf?.toObject ? req.user.sources.pdf.toObject() : req.user.sources?.pdf || {}),
+    status: 'connected',
+    fileName: req.file.originalname,
+    lastSyncedAt: new Date(),
+    lastError: ''
+  }
+  await req.user.save()
+
   res.json({
     success: true,
     preview: false,
@@ -194,6 +233,15 @@ router.post('/scan-syllabus/save', auth, asyncHandler(async (req, res) => {
 
   const io = req.app.get('io')
   created.forEach((task) => io.to(`user:${req.userId}`).emit('task:created', task))
+
+  req.user.sources.pdf = {
+    ...(req.user.sources?.pdf?.toObject ? req.user.sources.pdf.toObject() : req.user.sources?.pdf || {}),
+    status: 'connected',
+    fileName: originalFileName,
+    lastSyncedAt: new Date(),
+    lastError: ''
+  }
+  await req.user.save()
 
   res.json({
     success: true,

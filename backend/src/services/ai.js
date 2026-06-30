@@ -217,6 +217,40 @@ Return ONLY JSON: ${TASK_JSON_FORMAT}`,
   )
 }
 
+const generateDashboardSummary = async (tasks) => {
+  const activeTasks = tasks.filter((task) => task.status !== 'completed')
+  if (!activeTasks.length) return ''
+
+  const snapshot = activeTasks
+    .slice(0, 20)
+    .map((task) => `${task.title}|${task.priority}|${task.status}|${task.deadline ? new Date(task.deadline).toISOString() : 'none'}`)
+    .join('\n')
+  const key = cacheKey('dashboard-summary', snapshot)
+  const cached = await fromCache(key)
+  if (cached?.summary) return cached.summary
+
+  const summary = await callAI(
+    `You are writing a dashboard summary for a deadline manager.
+Today: ${new Date().toISOString().slice(0, 10)}.
+Use the real task list below. Mention actual counts and specific upcoming deadlines when useful.
+Rules:
+- 1 to 3 sentences maximum.
+- Mention high-priority items if any exist.
+- Do not use markdown.
+- Do not invent any tasks or dates.
+
+Tasks:
+${activeTasks.slice(0, 20).map((task) => {
+      const due = task.deadline ? new Date(task.deadline).toISOString() : 'No deadline'
+      return `- ${task.title} | priority: ${task.priority} | status: ${task.status} | due: ${due}`
+    }).join('\n')}`,
+    { maxTokens: 180 }
+  )
+
+  await toCache(key, { summary })
+  return summary
+}
+
 module.exports = {
   callAI,
   extractTasksFromText,
@@ -228,5 +262,6 @@ module.exports = {
   generateStarterContent,
   realityCheck,
   generateMorningBriefing,
-  extractTasksFromVoiceTranscript
+  extractTasksFromVoiceTranscript,
+  generateDashboardSummary
 }

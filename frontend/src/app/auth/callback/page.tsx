@@ -11,9 +11,10 @@ function CallbackHandler() {
     const token = params.get('token')
     const isNew = params.get('isNew') === 'true'
     const userId = params.get('userId')
+    const onboardingCompleted = params.get('onboardingCompleted') === 'true'
 
     if (!token) {
-      router.replace('/login')
+      router.replace('/')
       return
     }
 
@@ -24,7 +25,7 @@ function CallbackHandler() {
     // Also set as cookie so middleware can read it
     document.cookie = `defuse_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
 
-    router.replace(isNew ? '/onboarding' : '/dashboard')
+    router.replace(isNew || !onboardingCompleted ? '/?auth=complete' : '/dashboard')
   }, [params, router])
 
   return null

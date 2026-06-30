@@ -33,7 +33,7 @@ const taskSchema = new mongoose.Schema({
   },
   source: {
     type: String,
-    enum: ['gmail', 'calendar', 'screenshot', 'whatsapp', 'voice', 'manual'],
+    enum: ['gmail', 'calendar', 'pdf', 'image', 'screenshot', 'whatsapp', 'voice', 'manual'],
     default: 'manual'
   },
   sourceMetadata: mongoose.Schema.Types.Mixed,

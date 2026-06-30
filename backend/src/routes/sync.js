@@ -16,6 +16,13 @@ router.get('/gmail', auth, asyncHandler(async (req, res) => {
   const emails = await scanForDeadlines(authClient, days)
 
   if (!emails.length) {
+    req.user.sources.gmail = {
+      ...(req.user.sources?.gmail?.toObject ? req.user.sources.gmail.toObject() : req.user.sources?.gmail || {}),
+      status: 'connected',
+      lastSyncedAt: new Date(),
+      lastError: ''
+    }
+    await req.user.save()
     return res.json({ success: true, emailsScanned: 0, tasksCreated: 0, message: `No deadline emails found in last ${days} days` })
   }
 
@@ -49,6 +56,14 @@ router.get('/gmail', auth, asyncHandler(async (req, res) => {
     tasksCreated++
   }
 
+  req.user.sources.gmail = {
+    ...(req.user.sources?.gmail?.toObject ? req.user.sources.gmail.toObject() : req.user.sources?.gmail || {}),
+    status: 'connected',
+    lastSyncedAt: new Date(),
+    lastError: ''
+  }
+  await req.user.save()
+
   res.json({ success: true, emailsScanned: emails.length, tasksCreated, daysScanned: days })
 }))
 
@@ -71,6 +86,14 @@ router.get('/calendar', auth, asyncHandler(async (req, res) => {
     io.to(`user:${req.userId}`).emit('task:created', task)
     synced++
   }
+
+  req.user.sources.calendar = {
+    ...(req.user.sources?.calendar?.toObject ? req.user.sources.calendar.toObject() : req.user.sources?.calendar || {}),
+    status: 'connected',
+    lastSyncedAt: new Date(),
+    lastError: ''
+  }
+  await req.user.save()
 
   res.json({ success: true, eventsFound: events.length, synced, daysAhead: days })
 }))

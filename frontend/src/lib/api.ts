@@ -19,7 +19,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('defuse_token')
       localStorage.removeItem('defuse_user')
-      window.location.href = '/login'
+      console.warn('Received 401 from API. Session token was cleared without forcing a full-page reload.')
     }
     return Promise.reject(err)
   }

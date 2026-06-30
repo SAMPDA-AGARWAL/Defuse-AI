@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Manrope, Space_Grotesk } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 
 const manrope = Manrope({
@@ -33,9 +34,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   `
 
   return (
-    <html lang="en">
-      <body className={`${manrope.variable} ${spaceGrotesk.variable} bg-sr-bg font-sans text-sr-text antialiased`}>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#f5f7f2" />
+        <Script id="defuse-theme" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
+      </head>
+      <body
+        className={`${manrope.variable} ${spaceGrotesk.variable} bg-sr-bg font-sans text-sr-text antialiased`}
+        style={{ backgroundColor: 'rgb(var(--bg))' }}
+      >
         {children}
       </body>
     </html>

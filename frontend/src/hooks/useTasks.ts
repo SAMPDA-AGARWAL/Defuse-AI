@@ -6,7 +6,19 @@ import type { Task, TaskSummary } from '@/types'
 
 export const useTasks = (userId?: string) => {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [summary, setSummary] = useState<TaskSummary>({ critical: 0, high: 0, upcoming: 0, total: 0 })
+  const [summary, setSummary] = useState<TaskSummary>({
+    critical: 0,
+    high: 0,
+    upcoming: 0,
+    total: 0,
+    dueToday: 0,
+    active: 0,
+    completed: 0,
+    highPriority: 0,
+    overdue: 0,
+    sourceCounts: { gmail: 0, calendar: 0, pdf: 0, image: 0, voice: 0, whatsapp: 0, manual: 0 },
+    aiSummary: ''
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
